@@ -16,8 +16,8 @@ Requires [Rust](https://rustup.rs/) (1.85+ for edition 2024).
 
 ```bash
 # Clone and install
-git clone https://github.com/YOUR_USERNAME/am.git
-cd am
+git clone https://github.com/aravindvaddi/agent-manager.git
+cd agent-manager
 ./install.sh
 
 # Or manually
@@ -129,4 +129,4 @@ Any model supported by the [genai crate](https://github.com/jeremychone/rust-gen
 
 ## License
 
-MIT
+[MIT](LICENSE)
