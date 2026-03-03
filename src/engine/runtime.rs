@@ -1,9 +1,11 @@
 use anyhow::{Context, Result};
-use genai::chat::{ChatMessage, ChatOptions, ChatRequest};
-use genai::Client;
+use serde_json::json;
 
 use crate::model::agent::AgentConfig;
 use crate::store::skill_store;
+
+const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
+const DEFAULT_MODEL: &str = "anthropic/claude-sonnet-4.6";
 
 /// Build the system prompt by combining the agent's prompt with all attached skill prompts.
 fn compile_system_prompt(agent: &AgentConfig) -> Result<String> {
@@ -42,71 +44,67 @@ fn compile_system_prompt(agent: &AgentConfig) -> Result<String> {
     }
 }
 
-/// Build ChatOptions from agent config.
-fn build_options(agent: &AgentConfig) -> Option<ChatOptions> {
-    let opts = agent.options.as_ref()?;
-    let mut chat_opts = ChatOptions::default();
-
-    if let Some(temp) = opts.temperature {
-        chat_opts = chat_opts.with_temperature(temp);
-    }
-
-    Some(chat_opts)
-}
-
 /// Execute an agent with a user prompt, returning the complete response.
 pub async fn run(agent: &AgentConfig, user_prompt: &str) -> Result<String> {
     let system_prompt = compile_system_prompt(agent)?;
-    let model = agent
-        .model
-        .as_deref()
-        .unwrap_or("anthropic/claude-sonnet-4");
+    let model = agent.model.as_deref().unwrap_or(DEFAULT_MODEL);
 
-    let client = Client::default();
+    let api_key = std::env::var("OPENROUTER_API_KEY")
+        .context("OPENROUTER_API_KEY must be set")?;
 
-    let request = ChatRequest::default()
-        .with_system(&system_prompt)
-        .append_message(ChatMessage::user(user_prompt));
+    let messages = vec![
+        json!({"role": "system", "content": system_prompt}),
+        json!({"role": "user", "content": user_prompt}),
+    ];
 
-    let options = build_options(agent);
+    let mut body = json!({
+        "model": model,
+        "messages": messages,
+    });
+
+    if let Some(opts) = &agent.options {
+        if let Some(temp) = opts.temperature {
+            body["temperature"] = json!(temp);
+        }
+        if let Some(max_tokens) = opts.max_tokens {
+            body["max_tokens"] = json!(max_tokens);
+        }
+    }
+
+    let client = reqwest::Client::new();
     let response = client
-        .exec_chat(model, request, options.as_ref())
+        .post(OPENROUTER_URL)
+        .header("Authorization", format!("Bearer {api_key}"))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
         .await
-        .context("failed to execute chat request")?;
+        .context("failed to send request to OpenRouter")?;
 
-    let content = response
-        .into_first_text()
-        .unwrap_or_default();
+    let status = response.status();
+    let response_body: serde_json::Value = response
+        .json()
+        .await
+        .context("failed to parse OpenRouter response")?;
+
+    if !status.is_success() {
+        let error_msg = response_body["error"]["message"]
+            .as_str()
+            .unwrap_or("unknown error");
+        anyhow::bail!("OpenRouter API error ({}): {}", status, error_msg);
+    }
+
+    let content = response_body["choices"][0]["message"]["content"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
 
     Ok(content)
 }
 
 /// Execute an agent with streaming output.
+/// For now, falls back to complete mode.
 pub async fn run_stream(agent: &AgentConfig, user_prompt: &str) -> Result<String> {
-    let system_prompt = compile_system_prompt(agent)?;
-    let model = agent
-        .model
-        .as_deref()
-        .unwrap_or("anthropic/claude-sonnet-4");
-
-    let client = Client::default();
-
-    let request = ChatRequest::default()
-        .with_system(&system_prompt)
-        .append_message(ChatMessage::user(user_prompt));
-
-    let options = build_options(agent);
-
-    // For now, streaming falls back to complete mode.
-    // True streaming with exec_chat_stream can be added when needed.
-    let response = client
-        .exec_chat(model, request, options.as_ref())
-        .await
-        .context("failed to execute chat request")?;
-
-    let content = response
-        .into_first_text()
-        .unwrap_or_default();
-
-    Ok(content)
+    // TODO: implement true streaming with SSE
+    run(agent, user_prompt).await
 }

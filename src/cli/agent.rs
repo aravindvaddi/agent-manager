@@ -47,6 +47,26 @@ pub enum AgentCommand {
         /// Agent name
         name: String,
     },
+    /// Update an existing agent's configuration
+    Update {
+        /// Agent name
+        name: String,
+        /// LLM model to use (e.g. "anthropic/claude-sonnet-4")
+        #[arg(long)]
+        model: Option<String>,
+        /// Agent description
+        #[arg(long)]
+        description: Option<String>,
+        /// System prompt (inline)
+        #[arg(long)]
+        prompt: Option<String>,
+        /// Temperature (0.0-1.0)
+        #[arg(long)]
+        temperature: Option<f64>,
+        /// Max tokens for response
+        #[arg(long)]
+        max_tokens: Option<u32>,
+    },
 }
 
 pub fn handle(cmd: AgentCommand) -> Result<()> {
@@ -109,6 +129,54 @@ pub fn handle(cmd: AgentCommand) -> Result<()> {
         AgentCommand::Delete { name } => {
             agent_store::delete(&name)?;
             println!("Deleted agent '{name}'");
+            Ok(())
+        }
+        AgentCommand::Update {
+            name,
+            model,
+            description,
+            prompt,
+            temperature,
+            max_tokens,
+        } => {
+            let mut agent = agent_store::load(&name)?;
+
+            if model.is_none()
+                && description.is_none()
+                && prompt.is_none()
+                && temperature.is_none()
+                && max_tokens.is_none()
+            {
+                anyhow::bail!("provide at least one field to update");
+            }
+
+            if let Some(m) = model {
+                agent.model = Some(m);
+            }
+            if let Some(d) = description {
+                agent.description = Some(d);
+            }
+            if let Some(p) = prompt {
+                agent.prompt = Some(PromptSource {
+                    file: None,
+                    content: Some(p),
+                });
+            }
+            if temperature.is_some() || max_tokens.is_some() {
+                let opts = agent.options.get_or_insert(AgentOptions {
+                    temperature: None,
+                    max_tokens: None,
+                });
+                if let Some(t) = temperature {
+                    opts.temperature = Some(t);
+                }
+                if let Some(mt) = max_tokens {
+                    opts.max_tokens = Some(mt);
+                }
+            }
+
+            agent_store::save(&agent)?;
+            println!("Updated agent '{name}'");
             Ok(())
         }
     }
