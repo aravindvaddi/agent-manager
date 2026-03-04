@@ -19,3 +19,12 @@ pub struct PromptSource {
     pub file: Option<String>,
     pub content: Option<String>,
 }
+
+impl PromptSource {
+    pub fn inline(content: String) -> Self {
+        Self {
+            file: None,
+            content: Some(content),
+        }
+    }
+}

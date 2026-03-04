@@ -88,10 +88,7 @@ pub fn handle(cmd: AgentCommand) -> Result<()> {
                 None
             };
 
-            let prompt_source = prompt.map(|content| PromptSource {
-                file: None,
-                content: Some(content),
-            });
+            let prompt_source = prompt.map(PromptSource::inline);
 
             let config = AgentConfig {
                 name: name.clone(),
@@ -139,8 +136,6 @@ pub fn handle(cmd: AgentCommand) -> Result<()> {
             temperature,
             max_tokens,
         } => {
-            let mut agent = agent_store::load(&name)?;
-
             if model.is_none()
                 && description.is_none()
                 && prompt.is_none()
@@ -150,6 +145,8 @@ pub fn handle(cmd: AgentCommand) -> Result<()> {
                 anyhow::bail!("provide at least one field to update");
             }
 
+            let mut agent = agent_store::load(&name)?;
+
             if let Some(m) = model {
                 agent.model = Some(m);
             }
@@ -157,10 +154,7 @@ pub fn handle(cmd: AgentCommand) -> Result<()> {
                 agent.description = Some(d);
             }
             if let Some(p) = prompt {
-                agent.prompt = Some(PromptSource {
-                    file: None,
-                    content: Some(p),
-                });
+                agent.prompt = Some(PromptSource::inline(p));
             }
             if temperature.is_some() || max_tokens.is_some() {
                 let opts = agent.options.get_or_insert(AgentOptions {

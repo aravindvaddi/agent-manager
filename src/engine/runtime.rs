@@ -5,7 +5,7 @@ use crate::model::agent::AgentConfig;
 use crate::store::skill_store;
 
 const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL: &str = "anthropic/claude-sonnet-4.6";
+pub const DEFAULT_MODEL: &str = "anthropic/claude-sonnet-4.6";
 
 /// Build the system prompt by combining the agent's prompt with all attached skill prompts.
 fn compile_system_prompt(agent: &AgentConfig) -> Result<String> {

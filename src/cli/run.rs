@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Args;
 
-use crate::engine::runtime;
+use crate::engine::runtime::{self, DEFAULT_MODEL};
 use crate::store::agent_store;
 
 #[derive(Args)]
@@ -47,7 +47,7 @@ pub async fn handle(args: RunArgs) -> Result<()> {
     if args.json {
         let output = serde_json::json!({
             "agent": args.agent,
-            "model": agent.model.as_deref().unwrap_or("anthropic/claude-sonnet-4"),
+            "model": agent.model.as_deref().unwrap_or(DEFAULT_MODEL),
             "prompt": prompt,
             "response": response,
         });

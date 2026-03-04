@@ -5,22 +5,11 @@ use crate::store::paths;
 
 /// Create a new agent config file.
 pub fn create(config: &AgentConfig) -> Result<()> {
-    let dir = paths::agents_dir()?;
-    paths::ensure_dir(&dir)?;
-
     let path = paths::agent_path(&config.name)?;
     if path.exists() {
         bail!("agent '{}' already exists", config.name);
     }
-
-    let file = AgentFile {
-        agent: config.clone(),
-    };
-    let content = toml::to_string_pretty(&file).context("failed to serialize agent config")?;
-    std::fs::write(&path, content)
-        .with_context(|| format!("failed to write {}", path.display()))?;
-
-    Ok(())
+    save(config)
 }
 
 /// Load an agent config by name.
